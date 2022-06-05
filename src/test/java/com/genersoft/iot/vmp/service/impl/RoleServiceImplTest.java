@@ -13,7 +13,6 @@ import javax.annotation.Resource;
 import java.util.List;
 
 
-
 @SpringBootTest
 @RunWith(SpringRunner.class)
 class RoleServiceImplTest {
