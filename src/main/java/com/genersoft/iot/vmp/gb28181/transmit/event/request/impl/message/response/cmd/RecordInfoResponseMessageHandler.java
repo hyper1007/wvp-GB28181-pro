@@ -40,9 +40,7 @@ import static com.genersoft.iot.vmp.gb28181.utils.XmlUtil.getText;
 public class RecordInfoResponseMessageHandler extends SIPRequestProcessorParent implements InitializingBean, IMessageHandler {
 
     private Logger logger = LoggerFactory.getLogger(RecordInfoResponseMessageHandler.class);
-    public static volatile List<String> threadNameList = new ArrayList();
     private final String cmdType = "RecordInfo";
-    private final static String CACHE_RECORDINFO_KEY = "CACHE_RECORDINFO_";
 
     private ConcurrentLinkedQueue<HandlerCatchData> taskQueue = new ConcurrentLinkedQueue<>();
 
@@ -78,10 +76,14 @@ public class RecordInfoResponseMessageHandler extends SIPRequestProcessorParent 
             if (!taskQueueHandlerRun) {
                 taskQueueHandlerRun = true;
                 taskExecutor.execute(()->{
-                    try {
-                        while (!taskQueue.isEmpty()) {
+                    while (!taskQueue.isEmpty()) {
+                        try {
                             HandlerCatchData take = taskQueue.poll();
                             Element rootElementForCharset = getRootElement(take.getEvt(), take.getDevice().getCharset());
+                            if (rootElement == null) {
+                                logger.warn("[ 国标录像 ] content cannot be null, {}", evt.getRequest());
+                                continue;
+                            }
                             String sn = getText(rootElementForCharset, "SN");
                             String channelId = getText(rootElementForCharset, "DeviceID");
                             RecordInfo recordInfo = new RecordInfo();
@@ -143,10 +145,11 @@ public class RecordInfoResponseMessageHandler extends SIPRequestProcessorParent 
                                     releaseRequest(take.getDevice().getDeviceId(), sn);
                                 }
                             }
+                        } catch (DocumentException e) {
+                            throw new RuntimeException(e);
+                        } finally {
+                            taskQueueHandlerRun = false;
                         }
-                        taskQueueHandlerRun = false;
-                    }catch (DocumentException e) {
-                        throw new RuntimeException(e);
                     }
                 });
             }
@@ -157,6 +160,8 @@ public class RecordInfoResponseMessageHandler extends SIPRequestProcessorParent 
             e.printStackTrace();
         } catch (ParseException e) {
             e.printStackTrace();
+        }finally {
+            taskQueueHandlerRun = false;
         }
     }
 

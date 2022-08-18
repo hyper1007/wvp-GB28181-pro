@@ -5,8 +5,8 @@
         <i v-if="!playing" class="iconfont icon-play jessibuca-btn" @click="playBtnClick"></i>
         <i v-if="playing" class="iconfont icon-pause jessibuca-btn" @click="pause"></i>
         <i class="iconfont icon-stop jessibuca-btn" @click="destroy"></i>
-        <i v-if="isNotMute" class="iconfont icon-audio-high jessibuca-btn" @click="jessibuca.mute()"></i>
-        <i v-if="!isNotMute" class="iconfont icon-audio-mute jessibuca-btn" @click="jessibuca.cancelMute()"></i>
+        <i v-if="isNotMute" class="iconfont icon-audio-high jessibuca-btn" @click="mute()"></i>
+        <i v-if="!isNotMute" class="iconfont icon-audio-mute jessibuca-btn" @click="cancelMute()"></i>
       </div>
       <div class="buttons-box-right">
         <span class="jessibuca-btn">{{ kBps }} kb/s</span>
@@ -23,7 +23,7 @@
 </template>
 
 <script>
-let jessibuca = null;
+let jessibucaPlayer = {};
 export default {
   name: 'jessibuca',
   data() {
@@ -49,6 +49,7 @@ export default {
     window.onerror = (msg) => {
       // console.error(msg)
     };
+    console.log(this._uid)
     let paramUrl = decodeURIComponent(this.$route.params.url)
     this.$nextTick(() => {
       this.updatePlayerDomSize()
@@ -88,7 +89,7 @@ export default {
       let options = {};
       console.log("hasAudio  " + this.hasAudio)
 
-      jessibuca = new window.Jessibuca(Object.assign(
+      jessibucaPlayer[this._uid] = new window.Jessibuca(Object.assign(
         {
           container: this.$refs.container,
           videoBuffer: 0.2, // 最大缓冲时长，单位秒
@@ -117,7 +118,7 @@ export default {
         },
         options
       ));
-
+      let jessibuca = jessibucaPlayer[this._uid];
       let _this = this;
       jessibuca.on("load", function () {
         console.log("on load init");
@@ -216,40 +217,50 @@ export default {
     },
     play: function (url) {
       console.log(url)
-      if (jessibuca) {
+      if (jessibucaPlayer[this._uid]) {
         this.destroy();
       }
       this.create();
-      jessibuca.on("play", () => {
+      jessibucaPlayer[this._uid].on("play", () => {
         this.playing = true;
         this.loaded = true;
         this.quieting = jessibuca.quieting;
       });
-      if (jessibuca.hasLoaded()) {
-        jessibuca.play(url);
+      if (jessibucaPlayer[this._uid].hasLoaded()) {
+        jessibucaPlayer[this._uid].play(url);
       } else {
-        jessibuca.on("load", () => {
+        jessibucaPlayer[this._uid].on("load", () => {
           console.log("load 播放")
-          jessibuca.play(url);
+          jessibucaPlayer[this._uid].play(url);
         });
       }
     },
     pause: function () {
-      if (jessibuca) {
-        jessibuca.pause();
+      if (jessibucaPlayer[this._uid]) {
+        jessibucaPlayer[this._uid].pause();
       }
       this.playing = false;
       this.err = "";
       this.performance = "";
     },
+    mute: function () {
+      if (jessibucaPlayer[this._uid]) {
+        jessibucaPlayer[this._uid].mute();
+      }
+    },
+    cancelMute: function () {
+      if (jessibucaPlayer[this._uid]) {
+        jessibucaPlayer[this._uid].cancelMute();
+      }
+    },
     destroy: function () {
-      if (jessibuca) {
-        jessibuca.destroy();
+      if (jessibucaPlayer[this._uid]) {
+        jessibucaPlayer[this._uid].destroy();
       }
       if (document.getElementById("buttonsBox") == null) {
         this.$refs.container.appendChild(this.btnDom)
       }
-      jessibuca = null;
+      jessibucaPlayer[this._uid] = null;
       this.playing = false;
       this.err = "";
       this.performance = "";
@@ -262,7 +273,7 @@ export default {
     },
     fullscreenSwich: function () {
       let isFull = this.isFullscreen()
-      jessibuca.setFullscreen(!isFull)
+      jessibucaPlayer[this._uid].setFullscreen(!isFull)
       this.fullscreen = !isFull;
     },
     isFullscreen: function () {
@@ -273,8 +284,8 @@ export default {
     }
   },
   destroyed() {
-    if (jessibuca) {
-      jessibuca.destroy();
+    if (jessibucaPlayer[this._uid]) {
+      jessibucaPlayer[this._uid].destroy();
     }
     this.playing = false;
     this.loaded = false;

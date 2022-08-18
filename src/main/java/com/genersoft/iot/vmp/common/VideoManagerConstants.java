@@ -58,6 +58,8 @@ public class VideoManagerConstants {
 
 	public static final String MEDIA_TRANSACTION_USED_PREFIX = "VMP_MEDIA_TRANSACTION_";
 
+	public static final String MEDIA_STREAM_AUTHORITY = "MEDIA_STREAM_AUTHORITY_";
+
 	public static final String SIP_CSEQ_PREFIX = "VMP_SIP_CSEQ_";
 
 	public static final String SIP_SN_PREFIX = "VMP_SIP_SN_";
@@ -71,30 +73,59 @@ public class VideoManagerConstants {
 	public static final String SYSTEM_INFO_NET_PREFIX = "VMP_SYSTEM_INFO_NET_";
 
 
+
+
 	//************************** redis 消息*********************************
 
-	// 流变化的通知
+	/**
+	 * 流变化的通知
+	 */
 	public static final String WVP_MSG_STREAM_CHANGE_PREFIX = "WVP_MSG_STREAM_CHANGE_";
 
-	// 接收推流设备的GPS变化通知
+	/**
+	 * 接收推流设备的GPS变化通知
+	 */
 	public static final String VM_MSG_GPS = "VM_MSG_GPS";
 
-	// redis 消息通知设备推流到平台
+	/**
+	 * 接收推流设备的GPS变化通知
+	 */
+	public static final String VM_MSG_PUSH_STREAM_STATUS_CHANGE = "VM_MSG_PUSH_STREAM_STATUS_CHANGE";
+
+	/**
+	 * redis 消息通知设备推流到平台
+	 */
 	public static final String VM_MSG_STREAM_PUSH_REQUESTED = "VM_MSG_STREAM_PUSH_REQUESTED";
 
-	// 移动位置订阅通知
+	/**
+	 * redis 消息请求所有的在线通道
+	 */
+	public static final String VM_MSG_GET_ALL_ONLINE_REQUESTED = "VM_MSG_GET_ALL_ONLINE_REQUESTED";
+
+	/**
+	 * 移动位置订阅通知
+	 */
 	public static final String VM_MSG_SUBSCRIBE_MOBILE_POSITION = "mobileposition";
 
-	// 报警订阅的通知（收到报警向redis发出通知）
+	/**
+	 * 报警订阅的通知（收到报警向redis发出通知）
+	 */
 	public static final String VM_MSG_SUBSCRIBE_ALARM = "alarm";
 
-	// 报警通知的发送 （收到redis发出的通知，转发给其他平台）
+	/**
+	 * 报警通知的发送 （收到redis发出的通知，转发给其他平台）
+	 */
 	public static final String VM_MSG_SUBSCRIBE_ALARM_RECEIVE= "alarm_receive";
 
-	// 设备状态订阅的通知
+	/**
+	 * 设备状态订阅的通知
+	 */
 	public static final String VM_MSG_SUBSCRIBE_DEVICE_STATUS = "device";
 
+
 	//**************************    第三方  ****************************************
+
 	public static final String WVP_STREAM_GB_ID_PREFIX = "memberNo_";
 	public static final String WVP_STREAM_GPS_MSG_PREFIX = "WVP_STREAM_GPS_MSG_";
+
 }

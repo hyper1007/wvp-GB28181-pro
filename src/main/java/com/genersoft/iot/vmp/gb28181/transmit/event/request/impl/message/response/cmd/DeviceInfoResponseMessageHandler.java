@@ -75,6 +75,11 @@ public class DeviceInfoResponseMessageHandler extends SIPRequestProcessorParent 
         }
         try {
             rootElement = getRootElement(evt, device.getCharset());
+            if (rootElement == null) {
+                logger.warn("[ 接收到DeviceInfo应答消息 ] content cannot be null, {}", evt.getRequest());
+                responseAck(evt, Response.BAD_REQUEST);
+                return;
+            }
             Element deviceIdElement = rootElement.element("DeviceID");
             String channelId = deviceIdElement.getTextTrim();
             String key = DeferredResultHolder.CALLBACK_CMD_DEVICEINFO + device.getDeviceId() + channelId;
@@ -87,7 +92,6 @@ public class DeviceInfoResponseMessageHandler extends SIPRequestProcessorParent 
                 device.setStreamMode("UDP");
             }
             deviceService.updateDevice(device);
-//            storager.updateDevice(device);
 
             RequestMessage msg = new RequestMessage();
             msg.setKey(key);

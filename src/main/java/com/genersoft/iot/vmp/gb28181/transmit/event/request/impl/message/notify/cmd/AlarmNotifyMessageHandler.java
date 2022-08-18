@@ -1,5 +1,6 @@
 package com.genersoft.iot.vmp.gb28181.transmit.event.request.impl.message.notify.cmd;
 
+import com.alibaba.fastjson.JSONObject;
 import com.genersoft.iot.vmp.conf.SipConfig;
 import com.genersoft.iot.vmp.conf.UserSetting;
 import com.genersoft.iot.vmp.gb28181.bean.*;
@@ -11,6 +12,7 @@ import com.genersoft.iot.vmp.gb28181.utils.Coordtransform;
 import com.genersoft.iot.vmp.gb28181.utils.NumericUtil;
 import com.genersoft.iot.vmp.gb28181.utils.XmlUtil;
 import com.genersoft.iot.vmp.service.IDeviceAlarmService;
+import com.genersoft.iot.vmp.service.IDeviceChannelService;
 import com.genersoft.iot.vmp.storager.IRedisCatchStorage;
 import com.genersoft.iot.vmp.storager.IVideoManagerStorage;
 import com.genersoft.iot.vmp.utils.DateUtil;
@@ -31,6 +33,9 @@ import java.text.ParseException;
 
 import static com.genersoft.iot.vmp.gb28181.utils.XmlUtil.*;
 
+/**
+ * 报警事件的处理，参考：9.4
+ */
 @Component
 public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent implements InitializingBean, IMessageHandler {
 
@@ -58,6 +63,9 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
     @Autowired
     private IDeviceAlarmService deviceAlarmService;
 
+    @Autowired
+    private IDeviceChannelService deviceChannelService;
+
     @Override
     public void afterPropertiesSet() throws Exception {
         notifyMessageHandler.addHandler(cmdType, this);
@@ -65,23 +73,19 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
 
     @Override
     public void handForDevice(RequestEvent evt, Device device, Element rootElement) {
-        logger.info("收到来自设备[{}]的报警通知", device.getDeviceId());
+        logger.info("[收到报警通知]设备：{}", device.getDeviceId());
         // 回复200 OK
         try {
             responseAck(evt, Response.OK);
-        } catch (SipException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidArgumentException e) {
-            throw new RuntimeException(e);
-        } catch (ParseException e) {
-            throw new RuntimeException(e);
+        } catch (SipException | InvalidArgumentException | ParseException e) {
+            logger.error("[收到报警通知], 回复200OK失败", e);
         }
 
         Element deviceIdElement = rootElement.element("DeviceID");
         String channelId = deviceIdElement.getText().toString();
 
-
         DeviceAlarm deviceAlarm = new DeviceAlarm();
+        deviceAlarm.setCreateTime(DateUtil.getNow());
         deviceAlarm.setDeviceId(device.getDeviceId());
         deviceAlarm.setChannelId(channelId);
         deviceAlarm.setAlarmPriority(getText(rootElement, "AlarmPriority"));
@@ -113,21 +117,44 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
         if (!StringUtils.isEmpty(deviceAlarm.getAlarmMethod())) {
             if ( deviceAlarm.getAlarmMethod().contains(DeviceAlarmMethod.GPS.getVal() + "")) {
                 MobilePosition mobilePosition = new MobilePosition();
+                mobilePosition.setCreateTime(DateUtil.getNow());
                 mobilePosition.setDeviceId(deviceAlarm.getDeviceId());
                 mobilePosition.setTime(deviceAlarm.getAlarmTime());
                 mobilePosition.setLongitude(deviceAlarm.getLongitude());
                 mobilePosition.setLatitude(deviceAlarm.getLatitude());
                 mobilePosition.setReportSource("GPS Alarm");
-                // 默认来源坐标系为WGS-84处理
-                Double[] gcj02Point = Coordtransform.WGS84ToGCJ02(mobilePosition.getLongitude(), mobilePosition.getLatitude());
-                logger.info("GCJ02坐标：" + gcj02Point[0] + ", " + gcj02Point[1]);
-                mobilePosition.setGeodeticSystem("GCJ-02");
-                mobilePosition.setCnLng(gcj02Point[0] + "");
-                mobilePosition.setCnLat(gcj02Point[1] + "");
-                if (!userSetting.getSavePositionHistory()) {
-                    storager.clearMobilePositionsByDeviceId(device.getDeviceId());
+
+                // 更新device channel 的经纬度
+                DeviceChannel deviceChannel = new DeviceChannel();
+                deviceChannel.setDeviceId(device.getDeviceId());
+                deviceChannel.setChannelId(channelId);
+                deviceChannel.setLongitude(mobilePosition.getLongitude());
+                deviceChannel.setLatitude(mobilePosition.getLatitude());
+                deviceChannel.setGpsTime(mobilePosition.getTime());
+
+                deviceChannel = deviceChannelService.updateGps(deviceChannel, device);
+
+                mobilePosition.setLongitudeWgs84(deviceChannel.getLongitudeWgs84());
+                mobilePosition.setLatitudeWgs84(deviceChannel.getLatitudeWgs84());
+                mobilePosition.setLongitudeGcj02(deviceChannel.getLongitudeGcj02());
+                mobilePosition.setLatitudeGcj02(deviceChannel.getLatitudeGcj02());
+
+                if (userSetting.getSavePositionHistory()) {
+                    storager.insertMobilePosition(mobilePosition);
                 }
-                storager.insertMobilePosition(mobilePosition);
+                storager.updateChannelPosition(deviceChannel);
+
+                // 发送redis消息。 通知位置信息的变化
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("time", mobilePosition.getTime());
+                jsonObject.put("serial", deviceChannel.getDeviceId());
+                jsonObject.put("code", deviceChannel.getChannelId());
+                jsonObject.put("longitude", mobilePosition.getLongitude());
+                jsonObject.put("latitude", mobilePosition.getLatitude());
+                jsonObject.put("altitude", mobilePosition.getAltitude());
+                jsonObject.put("direction", mobilePosition.getDirection());
+                jsonObject.put("speed", mobilePosition.getSpeed());
+                redisCatchStorage.sendMobilePositionMsg(jsonObject);
             }
         }
         if (!StringUtils.isEmpty(deviceAlarm.getDeviceId())) {
@@ -143,7 +170,6 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
             alarmChannelMessage.setAlarmDescription(deviceAlarm.getAlarmDescription());
             alarmChannelMessage.setGbId(channelId);
             redisCatchStorage.sendAlarmMsg(alarmChannelMessage);
-
             return;
         }
 
@@ -152,7 +178,6 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
         if (sipConfig.isAlarm()) {
             deviceAlarmService.add(deviceAlarm);
         }
-
 
         if (redisCatchStorage.deviceIsOnline(device.getDeviceId())) {
             publisher.deviceAlarmEventPublish(deviceAlarm);
@@ -177,6 +202,7 @@ public class AlarmNotifyMessageHandler extends SIPRequestProcessorParent impleme
 
 
         DeviceAlarm deviceAlarm = new DeviceAlarm();
+        deviceAlarm.setCreateTime(DateUtil.getNow());
         deviceAlarm.setDeviceId(parentPlatform.getServerGBId());
         deviceAlarm.setChannelId(channelId);
         deviceAlarm.setAlarmPriority(getText(rootElement, "AlarmPriority"));

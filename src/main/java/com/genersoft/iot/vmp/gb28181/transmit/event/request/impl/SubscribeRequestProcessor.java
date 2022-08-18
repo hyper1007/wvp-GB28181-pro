@@ -82,9 +82,12 @@ public class SubscribeRequestProcessor extends SIPRequestProcessorParent impleme
 	@Override
 	public void process(RequestEvent evt) {
 		Request request = evt.getRequest();
-		System.out.println("收到订阅");
 		try {
 			Element rootElement = getRootElement(evt);
+			if (rootElement == null) {
+				logger.error("处理SUBSCRIBE请求  未获取到消息体{}", evt.getRequest());
+				return;
+			}
 			String cmd = XmlUtil.getText(rootElement, "CmdType");
 			if (CmdType.MOBILE_POSITION.equals(cmd)) {
 				processNotifyMobilePosition(evt, rootElement);
